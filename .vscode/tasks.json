@@ -1,0 +1,22 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build",
+			"type": "shell",
+			"command": "gcc",
+			"args": [
+				"-O3",
+				"monocypher.c",
+				"toolkit.c",
+				"platform_win.c",
+				"-o",
+				"spm.exe",
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		}
+	]
+}

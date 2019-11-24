@@ -36,12 +36,57 @@ void platform_clipboard(char* text){
 	}
 }
 
+char* platform_pathOfExecution(){
+	int size = 256;
+	char* path = malloc(sizeof(char) * size);
+	strcpy(path, "C:\\home\\apps\\");
+	return path;
+	GetModuleFileName(NULL, path, size);
+
+	while (GetLastError() == ERROR_INSUFFICIENT_BUFFER){
+		size *= 2;
+		path = realloc(path, size);
+		GetModuleFileName(NULL, path, size);
+	}
+
+	int slashHook = -1;
+	for (int i = 0; i < strlen(path); ++i)
+		if (path[i] == '\\')
+			slashHook = i;
+	// if (slashHook >= 0 && 
+	//     (slashHook + 1 < size && path[slashHook + 1] != '\0'))
+	path[slashHook + 1] = '\0';
+
+	return path;
+}
+
+void preparePaths(char* path, char** charset, char** at){
+	int pathLength = strlen(path);
+
+	int charsetPathLength = pathLength + strlen(CUSTOM_CHARSET_FILE) + 1;
+	*charset = malloc(sizeof(char) * charsetPathLength);
+	strcpy(*charset, path);
+	strcat(*charset, CUSTOM_CHARSET_FILE);
+	
+	int atPathLength = pathLength + strlen(SAVED_TARGETS_FILE) + 1;
+	*at = malloc(sizeof(char) * atPathLength);
+	strcpy(*at, path);
+	strcat(*at, SAVED_TARGETS_FILE);
+}
+
 int main(int argc, char* args[]){
 	if (argc < 3){
 		printf("%s\n%s%s", "usage: spm <master_password> <auth_target> -r(egister) | -c(heck)", 
 		                   "      custom charset should be stored in the first line of ", CUSTOM_CHARSET_FILE);
 		exit(0);
 	}
+
+	char* path = platform_pathOfExecution();
+	char* pathToCharset;
+	char* pathToAT;
+	preparePaths(path, &pathToCharset, &pathToAT);
+	free(path);
+
 	bool registering = false, checking = false;
 	if (argc >= 4){
 		if (args[3][1] == 'r')
@@ -51,7 +96,7 @@ int main(int argc, char* args[]){
 	}
 
 	char* charset = NULL;
-	FILE* charsetFile = fopen(CUSTOM_CHARSET_FILE, "r");
+	FILE* charsetFile = fopen(pathToCharset, "r");
 	int maxCharsetSize = spm_maxCharsetSize();
 	char* customCharsetData = malloc(sizeof(char) * maxCharsetSize);
 	if (charsetFile != NULL){
@@ -63,7 +108,7 @@ int main(int argc, char* args[]){
 	}
 
 	if (checking || registering){
-		FILE* authTargetsFile = fopen(SAVED_TARGETS_FILE, "a+");
+		FILE* authTargetsFile = fopen(pathToAT, "a+");
 		int offset = 0;
 		char targetHash[SPM_HASH_SIZE];
 		spm_saltedHash(targetHash, args[2], charset);
@@ -92,6 +137,8 @@ TARGET_ALREADY_REGISTERED:
 	crypto_wipe(password, strlen(password));
 	free(password);
 	free(customCharsetData);
+	free(pathToCharset);
+	free(pathToAT);
 
 	printf("%s\n", "Done");
 

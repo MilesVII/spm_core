@@ -18,6 +18,7 @@ License: [CC-BY-NC-SA]
 #include "stdbool.h"
 #include "toolkit.h"
 #include "monocypher.h"
+#include <assert.h>
 
 const char* CUSTOM_CHARSET_FILE = "spm_cc.txt";
 const char* SAVED_TARGETS_FILE = ".spm_at";
@@ -39,8 +40,6 @@ void platform_clipboard(char* text){
 char* platform_pathOfExecution(){
 	int size = 256;
 	char* path = malloc(sizeof(char) * size);
-	strcpy(path, "C:\\home\\apps\\");
-	return path;
 	GetModuleFileName(NULL, path, size);
 
 	while (GetLastError() == ERROR_INSUFFICIENT_BUFFER){
@@ -49,14 +48,14 @@ char* platform_pathOfExecution(){
 		GetModuleFileName(NULL, path, size);
 	}
 
-	int slashHook = -1;
-	for (int i = 0; i < strlen(path); ++i)
-		if (path[i] == '\\')
-			slashHook = i;
-	// if (slashHook >= 0 && 
-	//     (slashHook + 1 < size && path[slashHook + 1] != '\0'))
-	path[slashHook + 1] = '\0';
+	for (int i = strlen(path) - 1; i >= 1; --i)
+		if (path[i - 1] == '\\'){
+			path[i] = '\0';
+			return path;
+		}
 
+	assert(0);
+	printf("E: Current path not obtained\n");
 	return path;
 }
 

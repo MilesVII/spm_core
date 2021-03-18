@@ -22,7 +22,10 @@ License: [CC-BY-NC-SA]
 
 char defaultHashCharset[] = "!@&#0123456789!@&#abcdefghijklmnopqrstuvwxyz!@&#ABCDEFGHIJKLMNOPQRSTUVWXYZ!@&#";
 const char* SPM_SALT = "$4lt_";
-const int SPM_LENGTH_COMPRESSION = 4; //times, must be power of two
+const int SPM_LENGTH_COMPRESSION = 4; //times, must be power of two; Can only be 1, 2, 4 or 8
+
+const int SPM_ARGON_BLOCKS = 262144;
+const int SPM_ARGON_ITERATIONS = 7;
 
 void spm_generateHashPresentation(char* destination, uint8_t* source, char* customCharset, int length){
 	char* charset;
@@ -36,39 +39,64 @@ void spm_generateHashPresentation(char* destination, uint8_t* source, char* cust
 		destination[i] = charset[source[i] % l];
 }
 
-char* spm_generatePassword(const char* master, const char* target, char* customCharset){
+char* spm_generatePassword(char* master, char* target, char* customCharset){
 	char* charset;
 	if (customCharset != NULL)
 		charset = customCharset;
 	else
 		charset = defaultHashCharset;
 
-	uint8_t hash[SPM_HASH_SIZE], key0[SPM_HASH_SIZE], key1[SPM_HASH_SIZE];
+	uint8_t hash[SPM_HASH_SIZE];
 	int passwordLength = SPM_HASH_SIZE / SPM_LENGTH_COMPRESSION;
 	char* password = malloc(sizeof(char) * (passwordLength + 1));
 
-	crypto_blake2b(key0, (uint8_t*)master, strlen(master));
-	crypto_blake2b(key1, (uint8_t*)target, strlen(target));
-	for (int i = 0; i < SPM_HASH_SIZE; ++i)
-		key0[i] += key1[i];
-	crypto_blake2b(hash, key0, SPM_HASH_SIZE);
-	
-	for (int i = 0; i < SPM_HASH_SIZE; ++i){
-		if (i > passwordLength - 1)
+	void* workArea = malloc(1024 * SPM_ARGON_BLOCKS);
+	crypto_argon2i_general(hash, SPM_HASH_SIZE, workArea, SPM_ARGON_BLOCKS, SPM_ARGON_ITERATIONS, 
+	                       master, strlen(master), 
+	                       SPM_SALT, strlen(SPM_SALT), 
+	                       0, 0, target, strlen(target));
+	free(workArea);
+
+	for (int i = 0; i < passwordLength; ++i){
+		switch(SPM_LENGTH_COMPRESSION){
+		case (1): {
+			//64 characters in password
+			uint8_t x = hash[i] % strlen(charset);
+			password[i] = charset[x];
 			break;
-		int x = 0;
-		for (int j = 0; j < SPM_LENGTH_COMPRESSION; ++j)
-			x += hash[i + passwordLength * j];
-		x %= strlen(charset);
-		password[i] = charset[x];
+		}
+		case (2):{
+			//32 characters in passwordstrlen(charset);
+			uint16_t x = ((uint16_t*)hash)[i];
+			x %= strlen(charset);
+			password[i] = charset[x];
+			break;
+		}
+		case (4):{
+			//16 characters in password
+			uint32_t x = ((uint32_t*)hash)[i];
+			x %= strlen(charset);
+			password[i] = charset[x];
+			break;
+		}
+		case (8):{
+			//8 characters in password
+			uint64_t x = ((uint64_t*)hash)[i];
+			x %= strlen(charset);
+			password[i] = charset[x];
+			break;
+		}
+		deafult:
+			printf("E: Invalid SPM_LENGTH_COMPRESSION constant");
+			assert(0);
+			break;
+		}
 	}
 	password[passwordLength] = '\0';
 
 	crypto_wipe(hash, SPM_HASH_SIZE);
 	crypto_wipe(master, strlen(master));
 	crypto_wipe(target, strlen(target));
-	crypto_wipe(key0, strlen(target));
-	crypto_wipe(key1, strlen(target));
 	return password;
 }
 
